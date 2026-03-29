@@ -91,17 +91,10 @@ echo "${CYAN}[3/6] Detecting notebook filenames...${RESET}"
 echo "Available notebooks:"
 ls *.ipynb 2>/dev/null
 
-# Try known exact lab notebook names first
-SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-sync|documentai_sync' | grep -iv 'async' | head -1)
-ASYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-async|documentai_async|async' | head -1)
-
-# Fallback: first notebook = sync, second = async
-if [ -z "$SYNC_NB" ]; then
-  SYNC_NB=$(ls *.ipynb 2>/dev/null | sed -n '1p')
-fi
-if [ -z "$ASYNC_NB" ]; then
-  ASYNC_NB=$(ls *.ipynb 2>/dev/null | sed -n '2p')
-fi
+# Match sync notebook — explicitly exclude any filename containing 'async' or 'template'
+SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iv 'async' | grep -iv 'template' | head -1)
+# Match async notebook — must contain 'async'
+ASYNC_NB=$(ls *.ipynb 2>/dev/null | grep -i 'async' | head -1)
 
 if [ -z "$SYNC_NB" ] || [ -z "$ASYNC_NB" ]; then
   echo "${RED}ERROR: Could not find notebooks. Files in current directory:${RESET}"
