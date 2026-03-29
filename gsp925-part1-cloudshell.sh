@@ -19,20 +19,18 @@ echo "${RESET}"
 export PROJECT_ID=$(gcloud config get-value core/project)
 
 # ── STEP 1: Enable all required APIs in parallel ───────────
-echo "${CYAN}[1/4] Enabling APIs in parallel...${RESET}"
-gcloud services enable \
-  documentai.googleapis.com \
-  cloudfunctions.googleapis.com \
-  cloudbuild.googleapis.com \
-  eventarc.googleapis.com \
-  run.googleapis.com &
-API_PID=$!
+echo "${CYAN}[1/4] Enabling APIs...${RESET}"
+gcloud services enable documentai.googleapis.com
+gcloud services enable cloudfunctions.googleapis.com
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable geocoding-backend.googleapis.com
+gcloud services enable eventarc.googleapis.com
+gcloud services enable run.googleapis.com
 
-# Fetch access token while APIs are enabling
-ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
-
-wait $API_PID
 echo "${GREEN}✓ APIs enabled.${RESET}"
+
+# Fetch access token after APIs are enabled
+ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
 
 # ── STEP 2: Create both processors in parallel ─────────────
 echo "${CYAN}[2/4] Creating form-parser and ocr-processor in parallel...${RESET}"
