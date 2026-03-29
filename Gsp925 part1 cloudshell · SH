@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# ============================================================
+# GSP925 - PART 1 of 2
+# Run this in: CLOUD SHELL
+# Does: Enables APIs + creates both processors
+# ============================================================
+
+BOLD=`tput bold`; GREEN=`tput setaf 2`; YELLOW=`tput setaf 3`
+CYAN=`tput setaf 6`; RESET=`tput sgr0`; RED=`tput setaf 1`
+
+echo "${GREEN}${BOLD}"
+echo "================================================"
+echo "  GSP925 Part 1 — Cloud Shell"
+echo "  Enables APIs + Creates Processors"
+echo "================================================"
+echo "${RESET}"
+
+export PROJECT_ID=$(gcloud config get-value core/project)
+
+# ── STEP 1: Enable all required APIs in parallel ───────────
+echo "${CYAN}[1/4] Enabling APIs in parallel...${RESET}"
+gcloud services enable \
+  documentai.googleapis.com \
+  cloudfunctions.googleapis.com \
+  cloudbuild.googleapis.com \
+  eventarc.googleapis.com \
+  run.googleapis.com &
+API_PID=$!
+
+# Fetch access token while APIs are enabling
+ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+
+wait $API_PID
+echo "${GREEN}✓ APIs enabled.${RESET}"
+
+# ── STEP 2: Create both processors in parallel ─────────────
+echo "${CYAN}[2/4] Creating form-parser and ocr-processor in parallel...${RESET}"
+
+curl -s -X POST \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"display_name":"form-parser","type":"FORM_PARSER_PROCESSOR"}' \
+  "https://documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors" > /dev/null &
+
+curl -s -X POST \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"display_name":"ocr-processor","type":"OCR_PROCESSOR"}' \
+  "https://documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors" > /dev/null &
+
+wait
+echo "${GREEN}✓ Processors creation requested.${RESET}"
+
+# ── STEP 3: Poll until both processors are ENABLED ─────────
+echo "${CYAN}[3/4] Waiting for processors to become ENABLED (polling every 3s)...${RESET}"
+for i in $(seq 1 20); do
+  PROC_LIST=$(curl -s -X GET \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors")
+
+  COUNT=$(echo "$PROC_LIST" | grep -c '"state": "ENABLED"')
+  if [ "$COUNT" -ge 2 ]; then
+    echo "${GREEN}✓ Both processors are ENABLED!${RESET}"
+    break
+  fi
+  echo "  Still waiting... attempt $i/20"
+  sleep 3
+done
+
+# ── STEP 4: Extract and display Processor IDs ──────────────
+echo "${CYAN}[4/4] Extracting Processor IDs...${RESET}"
+
+FORM_PROCESSOR_ID=$(echo "$PROC_LIST" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for p in data.get('processors', []):
+    if 'form' in p.get('displayName','').lower():
+        print(p['name'].split('/')[-1])
+        break
+")
+
+OCR_PROCESSOR_ID=$(echo "$PROC_LIST" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for p in data.get('processors', []):
+    if 'ocr' in p.get('displayName','').lower():
+        print(p['name'].split('/')[-1])
+        break
+")
+
+# Save IDs to a file so Part 2 can read them
+echo "FORM_PROCESSOR_ID=$FORM_PROCESSOR_ID" > ~/processor_ids.env
+echo "OCR_PROCESSOR_ID=$OCR_PROCESSOR_ID"  >> ~/processor_ids.env
+
+echo ""
+echo "${GREEN}${BOLD}================================================"
+echo "  PART 1 COMPLETE"
+echo "================================================${RESET}"
+echo ""
+echo "${YELLOW}${BOLD}Form Parser Processor ID : ${GREEN}$FORM_PROCESSOR_ID${RESET}"
+echo "${YELLOW}${BOLD}OCR Processor ID         : ${GREEN}$OCR_PROCESSOR_ID${RESET}"
+echo ""
+echo "${YELLOW}IDs saved to ~/processor_ids.env${RESET}"
+echo ""
+echo "${CYAN}${BOLD}>>> NEXT: Go to Vertex AI Workbench > Open JupyterLab > Terminal"
+echo ">>> Then run Part 2: gsp925-part2-jupyter.sh${RESET}"
