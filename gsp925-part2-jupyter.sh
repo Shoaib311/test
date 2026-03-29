@@ -71,7 +71,8 @@ python3 -m pip install -q --upgrade \
   simplejson \
   nbconvert \
   nbformat \
-  ipykernel &
+  ipykernel \
+  papermill &
 PIP_PID=$!
 
 gsutil cp gs://$PROJECT_ID-labconfig-bucket/health-intake-form.pdf form.pdf &
@@ -87,16 +88,25 @@ echo "${GREEN}✓ Libraries installed and files copied.${RESET}"
 # ── STEP 3: Identify notebook filenames ────────────────────
 echo "${CYAN}[3/6] Detecting notebook filenames...${RESET}"
 
-# Find sync notebook (contains 'process_document' or 'sync' in name)
-SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'sync|form|document_ai_synchronous|1' | head -1)
-ASYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'async|batch|document_ai_asynchronous|2' | head -1)
+echo "Available notebooks:"
+ls *.ipynb 2>/dev/null
 
-# If grep didn't match, fallback: first notebook = sync, second = async
+# Try known exact lab notebook names first
+SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-sync|documentai_sync|sync' | head -1)
+ASYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-async|documentai_async|async' | head -1)
+
+# Fallback: first notebook = sync, second = async
 if [ -z "$SYNC_NB" ]; then
   SYNC_NB=$(ls *.ipynb 2>/dev/null | sed -n '1p')
 fi
 if [ -z "$ASYNC_NB" ]; then
   ASYNC_NB=$(ls *.ipynb 2>/dev/null | sed -n '2p')
+fi
+
+if [ -z "$SYNC_NB" ] || [ -z "$ASYNC_NB" ]; then
+  echo "${RED}ERROR: Could not find notebooks. Files in current directory:${RESET}"
+  ls -la
+  exit 1
 fi
 
 echo "${GREEN}✓ Sync notebook  : $SYNC_NB${RESET}"
@@ -137,39 +147,55 @@ PYEOF
 
 echo "${GREEN}✓ Processor IDs injected.${RESET}"
 
-# ── STEP 5: Execute sync notebook via nbconvert ────────────
+# ── STEP 5: Execute sync notebook ──────────────────────────
 echo "${CYAN}[5/6] Executing synchronous notebook (${SYNC_NB})...${RESET}"
 
-jupyter nbconvert \
-  --to notebook \
-  --execute \
-  --inplace \
-  --ExecutePreprocessor.timeout=120 \
-  --ExecutePreprocessor.kernel_name=python3 \
-  "$SYNC_NB"
+papermill "$SYNC_NB" "$SYNC_NB" -k python3 --execution-timeout 120
+SYNC_EXIT=$?
 
-if [ $? -eq 0 ]; then
-  echo "${GREEN}✓ Synchronous notebook executed successfully.${RESET}"
-else
-  echo "${RED}✗ Sync notebook execution failed. Check the notebook manually.${RESET}"
+if [ $SYNC_EXIT -ne 0 ]; then
+  echo "${YELLOW}papermill failed, trying nbconvert...${RESET}"
+  jupyter nbconvert \
+    --to notebook \
+    --execute \
+    --inplace \
+    --ExecutePreprocessor.timeout=120 \
+    --ExecutePreprocessor.kernel_name=python3 \
+    "$SYNC_NB"
+  SYNC_EXIT=$?
 fi
 
-# ── STEP 6: Execute async notebook via nbconvert ───────────
+if [ $SYNC_EXIT -eq 0 ]; then
+  echo "${GREEN}✓ Synchronous notebook executed successfully.${RESET}"
+else
+  echo "${RED}✗ Sync notebook execution failed.${RESET}"
+  echo "${YELLOW}Tip: Open ${SYNC_NB} in JupyterLab, set Processor ID to ${FORM_PROCESSOR_ID}, and run manually.${RESET}"
+fi
+
+# ── STEP 6: Execute async notebook ─────────────────────────
 echo "${CYAN}[6/6] Executing asynchronous notebook (${ASYNC_NB})...${RESET}"
 echo "${YELLOW}  (This may take 2-3 minutes for the batch job to complete)${RESET}"
 
-jupyter nbconvert \
-  --to notebook \
-  --execute \
-  --inplace \
-  --ExecutePreprocessor.timeout=360 \
-  --ExecutePreprocessor.kernel_name=python3 \
-  "$ASYNC_NB"
+papermill "$ASYNC_NB" "$ASYNC_NB" -k python3 --execution-timeout 360
+ASYNC_EXIT=$?
 
-if [ $? -eq 0 ]; then
+if [ $ASYNC_EXIT -ne 0 ]; then
+  echo "${YELLOW}papermill failed, trying nbconvert...${RESET}"
+  jupyter nbconvert \
+    --to notebook \
+    --execute \
+    --inplace \
+    --ExecutePreprocessor.timeout=360 \
+    --ExecutePreprocessor.kernel_name=python3 \
+    "$ASYNC_NB"
+  ASYNC_EXIT=$?
+fi
+
+if [ $ASYNC_EXIT -eq 0 ]; then
   echo "${GREEN}✓ Asynchronous notebook executed successfully.${RESET}"
 else
-  echo "${RED}✗ Async notebook execution failed. Check the notebook manually.${RESET}"
+  echo "${RED}✗ Async notebook execution failed.${RESET}"
+  echo "${YELLOW}Tip: Open ${ASYNC_NB} in JupyterLab, set Processor ID to ${OCR_PROCESSOR_ID}, and run manually.${RESET}"
 fi
 
 echo ""
