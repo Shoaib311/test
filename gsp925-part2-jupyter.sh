@@ -141,8 +141,8 @@ def inject_processor_id(nb_path, processor_id):
     else:
         print(f"  WARNING: No PROCESSOR_ID placeholder found in {nb_path}")
 
-inject_processor_id("$SYNC_NB",  "$FORM_PROCESSOR_ID")
-inject_processor_id("$ASYNC_NB", "$OCR_PROCESSOR_ID")
+inject_processor_id("$SYNC_NB",  "$OCR_PROCESSOR_ID")
+inject_processor_id("$ASYNC_NB", "$FORM_PROCESSOR_ID")
 PYEOF
 
 echo "${GREEN}✓ Processor IDs injected.${RESET}"
@@ -169,7 +169,7 @@ if [ $SYNC_EXIT -eq 0 ]; then
   echo "${GREEN}✓ Synchronous notebook executed successfully.${RESET}"
 else
   echo "${RED}✗ Sync notebook execution failed.${RESET}"
-  echo "${YELLOW}Tip: Open ${SYNC_NB} in JupyterLab, set Processor ID to ${FORM_PROCESSOR_ID}, and run manually.${RESET}"
+  echo "${YELLOW}Tip: Open ${SYNC_NB} in JupyterLab, set Processor ID to ${OCR_PROCESSOR_ID}, and run manually.${RESET}"
 fi
 
 # ── STEP 6: Execute async notebook ─────────────────────────
@@ -195,7 +195,7 @@ if [ $ASYNC_EXIT -eq 0 ]; then
   echo "${GREEN}✓ Asynchronous notebook executed successfully.${RESET}"
 else
   echo "${RED}✗ Async notebook execution failed.${RESET}"
-  echo "${YELLOW}Tip: Open ${ASYNC_NB} in JupyterLab, set Processor ID to ${OCR_PROCESSOR_ID}, and run manually.${RESET}"
+  echo "${YELLOW}Tip: Open ${ASYNC_NB} in JupyterLab, set Processor ID to ${FORM_PROCESSOR_ID}, and run manually.${RESET}"
 fi
 
 echo ""
