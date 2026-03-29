@@ -92,7 +92,7 @@ echo "Available notebooks:"
 ls *.ipynb 2>/dev/null
 
 # Try known exact lab notebook names first
-SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-sync|documentai_sync|sync' | head -1)
+SYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-sync|documentai_sync' | grep -iv 'async' | head -1)
 ASYNC_NB=$(ls *.ipynb 2>/dev/null | grep -iE 'documentai-async|documentai_async|async' | head -1)
 
 # Fallback: first notebook = sync, second = async
